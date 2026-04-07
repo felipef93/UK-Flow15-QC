@@ -1,4 +1,4 @@
-# Quality control of flow data package
+# A Quality control framework for river flow data in hydrological research
 
 This package performs quality control (QC) checks on 15-minute river flow data, following the methodology described in [placeholder_doi].
 
