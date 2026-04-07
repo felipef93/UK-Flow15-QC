@@ -1,4 +1,4 @@
-# 15_min_code_26
+# Quality control of flow data package
 
 This package performs quality control (QC) checks on 15-minute river flow data, following the methodology described in [placeholder_doi].
 
