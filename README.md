@@ -1,8 +1,17 @@
 # 15_min_code_26
 
-This package runs quality control (QC) checks on 15-minute river flow data and produces station-level QC outputs together with a QC summary table. It also includes a second workflow for hydro-region checks that append regional-event flags back to the station outputs.
+This package performs quality control (QC) checks on 15-minute river flow data, following the methodology described in [placeholder_doi].
 
-## What the package does
+The workflow is structured into two main processing steps:
+
+- `run_station_workflow.py`: runs station-level QC checks on the raw 15-minute flow data, including basic checks, consistency checks, high-flow diagnostics, and rainfall-based tests. It outputs QC flags at each timestep and generates station-level summaries.
+- `run_hydro_region_workflow.py`: performs hydro-region-based QC checks by analysing extreme events across neighbouring stations. It uses return period estimates derived from the station data to identify spatial inconsistencies and appends the corresponding hydro-region flags to the station outputs.
+
+The package generates the following outputs in the `outputs/` directory:
+- `<station_id>_qced.csv`: QCed station file containing the original time series together with all QC flags evaluated at each timestep.
+- `qc_summary.csv`: summary table reporting the number of occurrences of each QC flag for every station.
+
+## Code organisation
 
 The code is organised around a `station` object in `code/station.py`. Each station can run four main groups of checks:
 
@@ -11,7 +20,7 @@ The code is organised around a `station` object in `code/station.py`. Each stati
 - **High-flow QC**: GEV-based return periods, values above 6 standard deviations, values above a 1000-year return period threshold, and values above a multiple of the second-highest AMAX.
 - **Rainfall QC**: rainfall-response checks based on high-return-period flow events and associated rainfall.
 
-A second workflow groups stations by hydro-region and applies hydro-region checks using the station return periods already calculated by the high-flow routines.
+In a second instance a `hydro_region` object in `code/hydrology/hydro_region.py` groups these stations to identify nearby extrme events from the return period calculated in the previous workflow.
 
 ## Main scripts
 
@@ -40,37 +49,56 @@ The script:
 - creates station objects
 - runs **only** `high_flows()` so that station return periods are available for hydro-region checks
 - groups stations by the first three digits of the six-digit station identifier
-- applies the hydro-region checks defined in `src/hydrology/hydro_region.py`
+- applies the hydro-region checks defined in `code/hydrology/hydro_region.py`
 - appends the hydro-region outputs back into the existing station files in `outputs`
 - updates `outputs/qc_summary.csv`
 
-## Expected folder structure
+## Folder structure
 
 The package is expected to run from the project root with this structure:
 
 ```text
 15_min_code_26/
-├── run_station_workflow.py
-├── run_hydro_region_workflow.py
+├── run_station_workflow.py          # Runs station-level QC on all 15-min flow files
+├── run_hydro_region_workflow.py     # Runs hydro-region QC using station return periods
 ├── outputs/
 ├── sample_stations/
-│   ├── 15_min/
+│   ├── 15_min/                      # 15-minute flow data (CSV)
+│   │   └── <station_id>.csv         # e.g. 038001.csv (6-digit, zero-padded)
+│   │                                # Columns: datetime, value
 │   └── NRFA/
-│       ├── AMAX/
-│       ├── Daily/
-│       ├── POT/
-│       └── Rainfall/
-└── code/
-    ├── station.py
+│       ├── AMAX/                    # Annual maxima series (CSV)
+│       │   └── <station_id>.csv     # Columns include: datetime, value
+│       ├── Daily/                   # Daily mean flow data (CSV)
+│       │   └── <station_id>.csv     # Columns include: datetime, value
+│       ├── POT/                     # Peaks-over-threshold series (CSV)
+│       │   └── <station_id>.csv     # Columns include: datetime, value
+│       └── Rainfall/                # Rainfall data (CSV)
+│           └── <station_id>.csv     # Columns include: datetime, value
+└── src/
+    ├── station.py                   # Core station object: runs QC pipeline and writes outputs
     ├── basic_qc/
+    │   ├── drops.py                 # Detects sudden drops in flow values
+    │   ├── negatives.py             # Flags negative flow values
+    │   ├── shifts.py                # Detects abrupt level/flow shifts
+    │   ├── spikes.py                # Identifies relative and absolute spikes
+    │   ├── truncated.py             # Detects truncation in time series
+    │   └── unrealistically_high.py  # Flags unrealistically high values
     ├── consistency_checks/
+    │   ├── auxiliary_functions.py   # Helper functions for NRFA comparisons
+    │   ├── nrfa_amax.py             # Consistency checks against NRFA AMAX
+    │   └── nrfa_daily.py            # Consistency checks against NRFA daily data
     ├── high_flows_qc/
+    │   ├── above_std.py             # Flags extreme values using standard deviation thresholds
+    │   ├── auxiliary_calculate_amax.py # Computes annual maxima (AMAX)
+    │   ├── return_periods.py        # Fits GEV and computes return periods
+    │   └── top_amax.py              # Identifies highest AMAX-related anomalies
     └── hydrology/
-        ├── rainfall_checks.py
-        └── hydro_region.py
+        ├── rainfall_checks.py       # Rainfall-flow consistency and event-based checks
+        └── hydro_region.py          # Spatial QC using neighbouring stations (hydro-regions)
 ```
 
-## Input data conventions
+## Data conventions
 
 ### Station files
 
@@ -154,13 +182,6 @@ outputs/qc_summary.csv
 
 This contains one row per station and summarises the number of flagged time steps for each QC metric.
 
-
-## Important implementation notes
-
-- Station identifiers are expected to remain six-digit, zero-padded strings throughout the workflow.
-- `run_station_workflow.py` imports from `code/station.py`.
-- `run_hydro_region_workflow.py` uses `code/hydrology/hydro_region.py` for the hydro-region logic.
-- The hydro-region workflow does **not** rerun the full station QC; it reruns only the high-flow GEV calculations needed to derive return periods for the regional checks.
 
 ## Typical workflow
 
